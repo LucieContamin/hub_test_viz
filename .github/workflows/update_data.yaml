@@ -26,6 +26,19 @@ jobs:
             run: |
               cp -R ./hub_test_data/target_data/* ./hub_test_viz/target-data/*
 
+          - name: Setup R
+            uses: r-lib/actions/setup-r@v2
+
+          - name: Install system dependencies
+            run: sudo apt-get install libcurl4-openssl-dev libudunits2-dev libgdal-dev
+
+          - name: Install dependencies
+            run: |
+              R -e 'Sys.setenv("NOT_CRAN" = TRUE)
+                    install.packages(c("arrow", "remotes", "dplyr"))
+                    Sys.unsetenv("NOT_CRAN")
+                    remotes::install_url("https://github.com/Infectious-Disease-Modeling-Hubs/hubData/archive/refs/heads/main.zip")'
+
           - name: Process model-output file
             run: |
               Rscript code/processing_code.R
