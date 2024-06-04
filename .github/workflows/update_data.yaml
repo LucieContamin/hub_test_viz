@@ -24,7 +24,7 @@ jobs:
 
           - name: Copy target data
             run: |
-              cp -R ./hub_test_data/target_data/ ./hub_test_viz/target-data/
+              cp -r ./hub_test_data/target-data/. ./hub_test_viz/target-data/
 
           - name: Setup R
             uses: r-lib/actions/setup-r@v2
