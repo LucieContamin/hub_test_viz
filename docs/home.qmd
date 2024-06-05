@@ -1,0 +1,128 @@
+---
+title: "Example Complex Forecast Hub Visualization"
+format: 
+  dashboard:
+    nav-buttons: [github]
+server: shiny
+---
+```{r}
+#| context: setup
+library(plotly)
+library(dplyr)
+library(shiny)
+json_info <- jsonlite::read_json("../hub-config/viz.json")
+dc <- hubData::connect_model_output("../model-output/", 
+                                    partition_names = c("location", "target", 
+                                                        "model_id"),
+                                    file_format = "parquet")
+targ_info <- json_info$data_repository$target
+dc_target <- arrow::open_dataset(paste0("../", targ_info$dir_name),
+                                 partitioning = unlist(targ_info$partition))
+model_name <- dplyr::select(dc, model_id, reference_date) %>% 
+  dplyr::distinct() %>% 
+  dplyr::collect()
+last_date <- sort(unique(model_name$reference_date),
+                                   decreasing = TRUE)[1]
+```
+# Visualization
+
+## Sidebar {.sidebar}
+
+```{r}
+h6("Outcome")
+selectInput('target', NULL, 
+            choices = unlist(json_info$viz_settings$filtering$Outcome),
+            selected = unlist(json_info$viz_settings$filtering$Outcome)[1])
+
+h6("Location")
+selectInput('location', NULL, 
+            choices = unlist(json_info$viz_settings$filtering$Location),
+            selected = unlist(json_info$viz_settings$filtering$Location)[1])
+
+h6("Interval")
+selectInput('interval', NULL, 
+            choices = names(json_info$viz_settings$filtering$Interval),
+            selected = names(json_info$viz_settings$filtering$Interval)[1])
+
+h6("Select Target Date")
+checkboxInput("targ_date", paste0("Current (", last_date, ")"), 
+              value = TRUE)
+selectInput('as_of', "as of:", 
+            sort(unique(model_name$reference_date), decreasing = TRUE),
+            multiple = FALSE, selectize = FALSE,
+            selected = tail(sort(unique(model_name$reference_date)), 1))
+
+h6("Select Models")
+checkboxGroupInput('mod_id', NULL,
+                   choices = sort(unique(model_name$model_id)),
+                   selected = sort(unique(model_name$model_id))[1])
+```
+
+## Plot
+
+```{r}
+plotlyOutput('plot')
+```
+
+
+## Data
+
+```{r}
+#| context: server
+
+dataset <- reactive({
+  df <- dplyr::filter(dc, location == input$location, target == input$target, 
+                      model_id %in% input$mod_id, 
+                      reference_date %in% input$as_of)
+  df <- hubData::collect_hub(df)
+})
+
+targ_dataset <- reactive({
+  if (input$targ_date) {
+    dft <- dplyr::filter(dc_target, reference_date %in% last_date, 
+                         location == input$location, target == input$target)
+    dft <- dplyr::collect(dft)
+  } else {
+    dft <- NULL
+  }
+})
+
+as_of_dataset <- reactive({
+  dfasof <- dplyr::filter(dc_target, reference_date %in% input$as_of, 
+                         location == input$location, target == input$target)
+  dfasof <- dplyr::collect(dfasof)
+})
+
+output$plot <- renderPlotly({
+  int_sel <- 
+    unique(unlist(json_info$viz_settings$filtering$Interval[input$interval]))
+  if (input$targ_date) {
+    p <- 
+      hubVis::plot_step_ahead_model_output(model_output_data = dataset(), 
+                                           target_data = targ_dataset(),
+                                           use_median_as_point = TRUE, 
+                                           x_col_name = "target_end_date", 
+                                           x_target_col_name = "target_end_date",
+                                           intervals = int_sel)
+    p$x$attrs[purrr::map(p$x$attrs, "name") == "target"][[1]]$mode <- "line"
+    p$x$attrs[purrr::map(p$x$attrs, "name") == "target"][[1]]$marker <- NULL
+    p$x$attrs[purrr::map(p$x$attrs, "name") == "target"][[1]]$line$color <- "lightgray"
+  } else {
+    p <- 
+      hubVis::plot_step_ahead_model_output(model_output_data = dataset(), 
+                                           target_data = NULL, 
+                                           plot_target = FALSE,
+                                           use_median_as_point = TRUE, 
+                                           x_col_name = "target_end_date", 
+                                           x_target_col_name = "target_end_date",
+                                           intervals = int_sel)
+  }
+  p <- add_trace(p, data = as_of_dataset(), x = ~target_end_date, y=~observation,
+                 mode = "line", line = list(color = "black"), type = "scatter",
+                 legendgroup = "target", showlegend=FALSE)
+  p
+})
+
+```
+
+# Metadata
