@@ -1,10 +1,12 @@
 ---
 title: "Example Complex Forecast Hub Visualization"
-format: 
+format:
   dashboard:
     nav-buttons: [github]
 server: shiny
 ---
+
+
 ```{r}
 #| context: setup
 library(plotly)
