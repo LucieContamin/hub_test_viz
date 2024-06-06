@@ -53,9 +53,11 @@ selectInput('as_of', "as of:",
             selected = tail(sort(unique(model_name$reference_date)), 1))
 
 h6("Select Models")
+checkboxInput("all_mod", paste0("Select All Models"), 
+              value = TRUE)
 checkboxGroupInput('mod_id', NULL,
                    choices = sort(unique(model_name$model_id)),
-                   selected = sort(unique(model_name$model_id))[1])
+                   selected = character(0))
 ```
 
 ## Plot
@@ -69,6 +71,16 @@ plotlyOutput('plot')
 
 ```{r}
 #| context: server
+
+observeEvent(input$all_mod,{
+  if (input$all_mod) {
+    updateCheckboxGroupInput(session, inputId = "mod_id", 
+                             selected = unique(model_name$model_id))
+  } else {
+    updateCheckboxGroupInput(session, inputId = "mod_id", 
+                             selected = character(0))
+  }
+})
 
 dataset <- reactive({
   df <- dplyr::filter(dc, location == input$location, target == input$target, 
